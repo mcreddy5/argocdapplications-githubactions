@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: insight-api
+  namespace: development
+  labels:
+    name: insight-api
+spec:
+  type: ClusterIP
+  ports:
+    - name: mgmt-port
+      port: 8081
+      protocol: TCP
+      targetPort: mgmt-port
+    - name: server-port
+      port: 8080
+      protocol: TCP
+      targetPort: server-port
+  selector:
+    name: insight-api
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insight-api
+  namespace: development
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: insight-api
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: insight-api
+    spec:
+      imagePullSecrets:
+        - name: ecrreg
+      nodeSelector:
+        app: backend
+
+      tolerations:
+        - effect: NoSchedule
+          key: arm-backend
+          operator: Equal
+          value: api
+
+      containers:
+        - name: insight-api
+          image: 769294742237.dkr.ecr.us-east-2.amazonaws.com/insight-api:R16.1.2024.10.24-68
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1000Mi
+            requests:
+              cpu: 200m
+              memory: 200Mi
+
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /actuator/health
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /actuator/health
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+
+          ports:
+            - containerPort: 8081
+              name: mgmt-port
+              protocol: TCP
+
+            - containerPort: 8080
+              name: server-port
+              protocol: TCP
+
+          env:
+            - name: JAVA_OPTS
+              value: -Xms200M -Xmx800M
+
+            - name: SPRING_CLOUD_CONFIG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: SPRING_CLOUD_CONFIG_PASSWORD
+                  name: spring-secret
+
+            - name: SPRING_CLOUD_CONFIG_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: SPRING_CLOUD_CONFIG_USERNAME
+                  name: spring-secret
+
+            - name: SPRING_PROFILES_ACTIVE
+              valueFrom:
+                secretKeyRef:
+                  key: SPRING_PROFILES_ACTIVE
+                  name: spring-secret
+
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - echo started > /proc/1/fd/1
+
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - curl -XPOST http://localhost:8081/actuator/shutdown > /proc/1/fd/1
+
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 60
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: insight-api
+  namespace: development
+spec:
+  maxReplicas: 5
+  minReplicas: 2
+  metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 80
+          type: Utilization
+      type: Resource
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: insight-api
