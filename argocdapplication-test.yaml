@@ -1,0 +1,53 @@
+name: Deploy Multiple Applications to Argo CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+       - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Update KubeConfig
+        run: |
+          aws eks update-kubeconfig --region us-east-2 --name rev-dev-eks-cluster-new
+
+      - name: Set up Argo CD CLI
+        run: |
+          # Install argocd CLI
+          sudo curl -sSL https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64 -o /usr/local/bin/argocd
+          sudo chmod +x /usr/local/bin/argocd
+
+      - name: Login to Argo CD
+        run: |
+          argocd login argocd.dev.revlitix.com --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
+
+      - name: Deploy applications
+        run: |
+          for app in alert-api audit-service audit-trail-service insight-api; do
+            app_name="${app}-test"
+            argocd app create "$app_name"  \
+              --repo https://github.com/mcreddy5/argocdapplications-githubactions.git \
+              --path "$app" \
+              --dest-server https://kubernetes.default.svc \
+              --dest-namespace argocd \
+              --sync-policy manual \
+              --revision HEAD \
+              --project development
+          done
