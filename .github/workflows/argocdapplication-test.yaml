@@ -8,15 +8,15 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted  # Ensures it uses your self-hosted runner (bastion)
-    
-    steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v3
 
+    steps:
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '16'  # Using Node.js version 16
+
+    - name: Checkout the repository
+      uses: actions/checkout@v3
 
     - name: SSH into kube-proxy-dev instance and deploy to ArgoCD
       env:
