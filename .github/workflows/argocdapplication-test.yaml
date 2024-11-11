@@ -1,49 +1,32 @@
-name: Deploy Multiple Applications to Argo CD
+name: Deploy to ArgoCD
 
 on:
   push:
     branches:
-      - main
+      - main  # Change this to your default branch
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: argocd  # Ensures it uses your self-hosted runner (bastion)
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout the repository
+      uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+    - name: SSH into kube-proxy-dev instance and deploy to ArgoCD
+      env:
+        ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+        ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+      run: |
+        # SSH into the kube-proxy-dev instance
+        ssh -o StrictHostKeyChecking=no user@kube-proxy-dev << 'EOF'
+          # Once connected, log in to ArgoCD
+          argocd login argocd.dev.revlitix.com --username $ARGOCD_USERNAME --password $ARGOCD_PASSWORD --insecure
 
-      - name: Install kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
-
-      - name: Update KubeConfig
-        run: |
-          aws eks update-kubeconfig --region us-east-2 --name rev-dev-eks-cluster-new
-
-      - name: Set up Argo CD CLI
-        run: |
-          # Install argocd CLI
-          sudo curl -sSL https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64 -o /usr/local/bin/argocd
-          sudo chmod +x /usr/local/bin/argocd
-
-      - name: Login to Argo CD
-        run: |
-          argocd login argocd.dev.revlitix.com --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
-
-      - name: Deploy applications
-        run: |
+          # Deploy the applications
           for app in alert-api audit-service audit-trail-service insight-api; do
             app_name="${app}-test"
-            argocd app create "$app_name"  \
+            argocd app create "$app_name" \
               --repo https://github.com/mcreddy5/argocdapplications-githubactions.git \
               --path "$app" \
               --dest-server https://kubernetes.default.svc \
@@ -52,3 +35,4 @@ jobs:
               --revision HEAD \
               --project development
           done
+        EOF
