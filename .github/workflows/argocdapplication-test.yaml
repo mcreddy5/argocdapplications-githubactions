@@ -7,11 +7,16 @@ on:
 
 jobs:
   deploy:
-    runs-on: argocd  # Ensures it uses your self-hosted runner (bastion)
+    runs-on: self-hosted  # Ensures it uses your self-hosted runner (bastion)
     
     steps:
     - name: Checkout the repository
       uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'  # Using Node.js version 16
 
     - name: SSH into kube-proxy-dev instance and deploy to ArgoCD
       env:
@@ -19,7 +24,7 @@ jobs:
         ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
       run: |
         # SSH into the kube-proxy-dev instance
-        ssh -o StrictHostKeyChecking=no user@kube-proxy-dev << 'EOF'
+        ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} user@kube-proxy-dev << 'EOF'
           # Once connected, log in to ArgoCD
           argocd login argocd.dev.revlitix.com --username $ARGOCD_USERNAME --password $ARGOCD_PASSWORD --insecure
 
