@@ -23,7 +23,8 @@ jobs:
           argocd login argocd.dev.revlitix.com \
             --username "$ARGOCD_USERNAME" \
             --password "$ARGOCD_PASSWORD" \
-            --insecure
+            --insecure \
+            --grpc-web
 
           # Create or sync ArgoCD applications
           for app in alert-api audit-service audit-trail-service insight-api; do
