@@ -12,9 +12,6 @@ jobs:
     steps:
       - name: Deploy Applications via Target EC2
         run: |
-          # Define applications in a file or inline
-          apps="alert-api audit-service audit-trail-service insight-api" # Add all 40 app names
-
           # SSH into the target EC2 machine
           ssh kube-proxy-dev << 'EOF'
           echo "Connected to target machine: $(hostname)"
@@ -26,29 +23,28 @@ jobs:
             --insecure \
             --grpc-web
 
-          # Function to create/sync an application
-          create_or_sync_app() {
-            local app="\$1"         # Original app name
-            local app_name="\$app-test" # Append '-test' to the application name
-            echo "Processing application: \$app_name"
+          # Define applications
+          applications=("alert-api" "audit-service" "audit-trail-service" "insight-api")
+
+          # Create or sync ArgoCD applications
+          for app in "${applications[@]}"; do
+            app_name="${app}-test"
+            echo "Processing application: $app_name"
             
-            if argocd app get "\$app_name" > /dev/null 2>&1; then
-              echo "Application \$app_name already exists"
+            # Check if the application already exists
+            if argocd app get "$app_name" > /dev/null 2>&1; then
+              echo "Application $app_name already exists"
             else
-              echo "Creating application: \$app_name"
-              argocd app create "\$app_name" \
+              echo "Creating application: $app_name"
+              # Create the application with manual sync (default)
+              argocd app create "$app_name" \
                 --repo https://github.com/mcreddy5/argocdapplications-githubactions.git \
-                --path "\$app" \ # Use the original name for the path
+                --path "$app" \
                 --dest-server https://CDD2784112303F2DA634E39463523C0D.gr7.us-east-2.eks.amazonaws.com \
                 --dest-namespace development \
                 --revision HEAD \
-                --project development || echo "Failed to create \$app_name"
+                --project development
             fi
-          }
-
-          # Process applications and append '-test' only to the application name
-          echo "$apps" | tr ' ' '\n' | while read -r app; do
-            create_or_sync_app "\$app"
           done
 
           echo "All applications processed."
