@@ -1,43 +1,51 @@
-name: Deploy to ArgoCD
+name: Deploy to ArgoCD via Remote EC2
 
 on:
   push:
     branches:
-      - main  # Change this to your default branch
+      - main  # Trigger on pushes to the main branch
 
 jobs:
-  deploy:
-    runs-on: self-hosted  # Ensures it uses your self-hosted runner (bastion)
+  deploy-argocd:
+    runs-on: self-hosted  # The GitHub self-hosted runner
 
     steps:
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '16'  # Using Node.js version 16
+      - name: Deploy Applications via Target EC2
+        env:
+          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+        run: |
+          # SSH into the target EC2 machine
+          ssh kube-proxy-dev << 'EOF'
+          echo "Connected to target machine: $(hostname)"
+          
+          # Login to ArgoCD using secrets
+          argocd login argocd.dev.revlitix.com \
+            --username "$ARGOCD_USERNAME" \
+            --password "$ARGOCD_PASSWORD" \
+            --insecure
 
-    - name: Checkout the repository
-      uses: actions/checkout@v3
-
-    - name: SSH into kube-proxy-dev instance and deploy to ArgoCD
-      env:
-        ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
-        ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
-      run: |
-        # SSH into the kube-proxy-dev instance
-        ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} user@kube-proxy-dev << 'EOF'
-          # Once connected, log in to ArgoCD
-          argocd login argocd.dev.revlitix.com --username $ARGOCD_USERNAME --password $ARGOCD_PASSWORD --insecure
-
-          # Deploy the applications
+          # Create or sync ArgoCD applications
           for app in alert-api audit-service audit-trail-service insight-api; do
             app_name="${app}-test"
-            argocd app create "$app_name" \
-              --repo https://github.com/mcreddy5/argocdapplications-githubactions.git \
-              --path "$app" \
-              --dest-server https://kubernetes.default.svc \
-              --dest-namespace argocd \
-              --sync-policy manual \
-              --revision HEAD \
-              --project development
+            echo "Processing application: $app_name"
+            
+            # Check if the application already exists
+            if argocd app get "$app_name" > /dev/null 2>&1; then
+              echo "Application $app_name already exists"
+            else
+              echo "Creating application: $app_name"
+              # Create the application with manual sync (default)
+              argocd app create "$app_name" \
+                --repo https://github.com/mcreddy5/argocdapplications-githubactions.git \
+                --path "$app" \
+                --dest-server https://CDD2784112303F2DA634E39463523C0D.gr7.us-east-2.eks.amazonaws.com \
+                --dest-namespace development \
+                --revision HEAD \
+                --project development
+            fi
           done
-        EOF
+
+          echo "All applications processed."
+
+          EOF
