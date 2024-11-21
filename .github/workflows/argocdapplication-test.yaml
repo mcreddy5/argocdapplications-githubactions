@@ -1,4 +1,4 @@
-name: Deploy to ArgoCD via Remote EC2
+name: Deploy Applications to ArgoCD via Remote EC2
 
 on:
   push:
@@ -10,16 +10,14 @@ jobs:
     runs-on: self-hosted  # The GitHub self-hosted runner
 
     steps:
-      - name: Debug ARGOCD Username and Password
-        run: |
-          echo "ARGOCD_USERNAME is set to: $ARGOCD_USERNAME"
-          echo "ARGOCD_PASSWORD is set to: $ARGOCD_PASSWORD"
-
       - name: Deploy Applications via Target EC2
         env:
           ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
           ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
         run: |
+          echo "ARGOCD_USERNAME is set to: $ARGOCD_USERNAME"
+          echo "ARGOCD_PASSWORD is set to: $ARGOCD_PASSWORD"
+
           # SSH into the target EC2 machine
           ssh -vvv kube-proxy-dev << 'EOF'
           echo "Connected to target machine: $(hostname)"
