@@ -13,7 +13,7 @@ jobs:
       - name: Deploy Applications via Target EC2
         run: |
           # Define applications in a file or inline
-          apps="alert-api audit-service audit-trail-service insight-api " # Add all 40 app names
+          apps="alert-api audit-service audit-trail-service insight-api" # Add all 40 app names
 
           # SSH into the target EC2 machine
           ssh kube-proxy-dev << 'EOF'
@@ -28,7 +28,8 @@ jobs:
 
           # Function to create/sync an application
           create_or_sync_app() {
-            local app_name=\$1
+            local app="\$1"         # Original app name
+            local app_name="\$app-test" # Append '-test' to the application name
             echo "Processing application: \$app_name"
             
             if argocd app get "\$app_name" > /dev/null 2>&1; then
@@ -37,7 +38,7 @@ jobs:
               echo "Creating application: \$app_name"
               argocd app create "\$app_name" \
                 --repo https://github.com/mcreddy5/argocdapplications-githubactions.git \
-                --path "\$app_name" \
+                --path "\$app" \ # Use the original name for the path
                 --dest-server https://CDD2784112303F2DA634E39463523C0D.gr7.us-east-2.eks.amazonaws.com \
                 --dest-namespace development \
                 --revision HEAD \
@@ -45,9 +46,9 @@ jobs:
             fi
           }
 
-          # Process applications
+          # Process applications and append '-test' only to the application name
           echo "$apps" | tr ' ' '\n' | while read -r app; do
-            create_or_sync_app "\$app-test"
+            create_or_sync_app "\$app"
           done
 
           echo "All applications processed."
