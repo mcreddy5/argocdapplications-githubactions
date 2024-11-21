@@ -11,15 +11,18 @@ jobs:
 
     steps:
       - name: Deploy Applications via Target EC2
+        env:
+          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
         run: |
           # SSH into the target EC2 machine
           ssh kube-proxy-dev << 'EOF'
           echo "Connected to target machine: $(hostname)"
           
-          # Login to ArgoCD using secrets
+          # Login to ArgoCD using secrets from GitHub Actions environment variables
           argocd login argocd.dev.revlitix.com \
-            --username admin \
-            --password Revlitix@47937db79634 \
+            --username "$ARGOCD_USERNAME" \
+            --password "$ARGOCD_PASSWORD" \
             --insecure \
             --grpc-web
 
@@ -45,5 +48,4 @@ jobs:
           done
 
           echo "All applications processed."
-
           EOF
